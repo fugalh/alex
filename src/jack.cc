@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "jack.h"
+#include "threads.h"
 
 Jack::Jack(const char *client_name)
 {
@@ -64,26 +65,32 @@ Jack::Jack(const char *client_name)
                     JackPortIsPhysical|JackPortIsOutput)) == NULL) 
     {
 	fprintf(stderr, "Cannot find any physical capture ports\n");
-	exit(1);
+	//exit(1);
+    }
+    else 
+    {
+	if (jack_connect (client, ports[0], jack_port_name (input_port))) 
+	{
+	    fprintf (stderr, "cannot connect input ports\n");
+	}
+	free (ports);
     }
 
-    if (jack_connect (client, ports[0], jack_port_name (input_port))) {
-	fprintf (stderr, "cannot connect input ports\n");
-    }
-
-    free (ports);
 
     if ((ports = jack_get_ports (client, NULL, NULL, 
-                    JackPortIsPhysical|JackPortIsInput)) == NULL) {
+                    JackPortIsPhysical|JackPortIsInput)) == NULL) 
+    {
 	fprintf(stderr, "Cannot find any physical playback ports\n");
-	exit(1); // XXX Exception
+	//exit(1);
+    } 
+    else 
+    {
+	if (jack_connect (client, jack_port_name (output_port), ports[0])) 
+	{
+	    fprintf (stderr, "cannot connect output ports\n");
+	}
+	free (ports);
     }
-
-    if (jack_connect (client, jack_port_name (output_port), ports[0])) {
-	fprintf (stderr, "cannot connect output ports\n");
-    }
-
-    free (ports);
 }
 
 Jack::~Jack()
@@ -121,10 +128,12 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
     // input
     ret = jack_ringbuffer_write(input_rb, (char*)in, n);
     if (ret < n) { /* somebody do something! */ }
+    sem_post(event_sem);
 
     // output
     ret = jack_ringbuffer_read(output_rb, (char*)out, n);
     if (ret < n) { /* somebody do something! */ }
+
 
     return 0;      
 }

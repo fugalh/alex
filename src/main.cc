@@ -23,7 +23,7 @@ int main(int argc, char **argv)
     sleep(10);
     iax.hangup("guten abend");
 
-    signal(SIGINT, sighandler);
+//    signal(SIGINT, sighandler);
     while(1)
         sleep(1);
     return 0;
