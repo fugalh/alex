@@ -1,27 +1,45 @@
 #ifndef ALEX_JACK_H
 #define ALEX_JACK_H
 
-#include "audio.h"
-#include <jack/jack.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef jack_default_audio_sample_t sample_t;
-class Jack : public AudioInterface
+#include <jack/jack.h>
+#include <jack/ringbuffer.h>
+
+    void jack_start();
+    void jack_stop();
+
+    extern jack_ringbuffer_t *jirb;
+    extern jack_ringbuffer_t *jorb;
+    extern int *jack_off_hook;
+    extern int samplerate;
+
+    typedef jack_default_audio_sample_t sample_t;
+
+#ifdef __cplusplus
+}
+
+#include "audio.h"
+#include <samplerate.h>
+
+class Jack : public Audio
 {
     public:
-        Jack(const char *client_name);
+        Jack();
         ~Jack();
 
+        int read(short *buf, int count);
+        int write(short *buf, int count);
+
     private:
-        static int jack_process_wrapper(jack_nframes_t nframes, void *arg);
-        static void jack_shutdown_wrapper(void *arg);
-
-        int jack_process(jack_nframes_t nframes, void *arg);
-        void jack_shutdown(void *arg);
-        jack_port_t *input_port;
-        jack_port_t *output_port;
-        jack_client_t *client;
-	sample_t *buf;
-
+        SRC_STATE *src_state_input;
+        SRC_STATE *src_state_output;
+        SRC_DATA src_data_input;
+        SRC_DATA src_data_output;
 };
+
+#endif // __cplusplus
 
 #endif

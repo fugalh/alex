@@ -12,122 +12,92 @@
 #include <samplerate.h>
 #define min(X, Y)  ((X) < (Y) ? (X) : (Y))
 
-Jack::Jack(const char *client_name)
+Jack::Jack()
 {
-    const char **ports;
-
-    buf = (sample_t*)malloc(48000 * sizeof(sample_t));
-
-    /* try to become a client of the JACK server */
-
-    if ((client = jack_client_new (client_name)) == 0) 
+    jack_off_hook = &off_hook;
+    int err;
+    src_state_input = src_new(SRC_SINC_BEST_QUALITY, 1, &err);
+    if (!src_state_input)
     {
-	fprintf (stderr, "jack server not running?\n");
-	exit(1); // XXX maybe an exception?
+        fprintf(stderr,"Error creating src_state_input: %s\n",src_strerror(err));
+        // raise an exception?
     }
-
-    /* tell the JACK server to call `process()' whenever
-       there is work to be done.
-       */
-
-    jack_set_process_callback (client, &jack_process_wrapper, this);
-
-    /* tell the JACK server to call `jack_shutdown()' if
-       it ever shuts down, either entirely, or if it
-       just decides to stop calling us.
-       */
-
-    //jack_on_shutdown (client, &jack_shutdown_wrapper, this);
-
-    /* display the current sample rate. 
-    */
-
-    printf ("engine sample rate: %lu\n",
-	    jack_get_sample_rate (client));
-
-    /* create two ports */
-
-    input_port = jack_port_register (client, "input", 
-            JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-    output_port = jack_port_register (client, "output", 
-            JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-
-    /* tell the JACK server that we are ready to roll */
-
-    if (jack_activate (client)) 
+    src_state_output = src_new(SRC_SINC_BEST_QUALITY, 1, &err);
+    if (!src_state_output)
     {
-	fprintf (stderr, "cannot activate client");
-	exit(1); // XXX Exception
+        fprintf(stderr,"Error creating src_state_output: %s\n",src_strerror(err));
+        // raise an exception?
     }
-
-    /* connect the ports. Note: you can't do this before
-       the client is activated, because we can't allow
-       connections to be made to clients that aren't
-       running.
-       */
-
-    if ((ports = jack_get_ports (client, NULL, NULL, 
-                    JackPortIsPhysical|JackPortIsOutput)) == NULL) 
-    {
-	fprintf(stderr, "Cannot find any physical capture ports\n");
-	//exit(1);
-    }
-    else 
-    {
-	if (jack_connect (client, ports[0], jack_port_name (input_port))) 
-	{
-	    fprintf (stderr, "cannot connect input ports\n");
-	}
-	free (ports);
-    }
-
-
-    if ((ports = jack_get_ports (client, NULL, NULL, 
-                    JackPortIsPhysical|JackPortIsInput)) == NULL) 
-    {
-	fprintf(stderr, "Cannot find any physical playback ports\n");
-	//exit(1);
-    } 
-    else 
-    {
-	if (jack_connect (client, jack_port_name (output_port), ports[0])) 
-	{
-	    fprintf (stderr, "cannot connect output ports\n");
-	}
-	free (ports);
-    }
+    jack_start();
 }
 
 Jack::~Jack()
 {
-    jack_deactivate(client);
-    jack_client_close (client);
-    free(buf);
+    src_delete(src_state_input);
+    src_delete(src_state_output);
+    jack_stop();
 }
 
-/**
- * The process callback for this JACK application.
- * It is called by JACK at the appropriate times.
- */
-int Jack::jack_process_wrapper(jack_nframes_t nframes, void *arg)
+int Jack::read(short *buf, int count)
 {
-    return ((Jack*)arg)->jack_process(nframes,arg);
-}
+    SRC_DATA *d = &src_data_input;
 
-void normalize(float *buf, int nframes)
-{
-    float max,min;
-    max = min = 0;
-    for (int i=0; i<nframes; i++)
+    // XXX Think about doing this with vec
+    int fbuf_len = min(count,jack_ringbuffer_read_space(jirb)/sizeof(sample_t));
+    int fbuf_size = fbuf_len * sizeof(sample_t);
+    sample_t *fbuf = (sample_t*)alloca(fbuf_size);
+    jack_ringbuffer_read(jirb, (char*)fbuf, fbuf_size);
+
+    // resample
+    sample_t *fbuf2 = (sample_t*)alloca(count*sizeof(sample_t));
+    d->data_in = fbuf;
+    d->input_frames = fbuf_len;
+    d->data_out = fbuf2;
+    d->output_frames = count;
+    d->src_ratio = 8000.0 / samplerate;
+    d->end_of_input = 0;
+    int ret = src_process(src_state_input, d);
+    if (ret != 0)
     {
-	float s = *(buf+i);
-	if (max < s)
-	    max = s;
-	if (min > s)
-	    min = s;
+        fprintf(stderr,"read(): %s\n",src_strerror(ret));
+        return 0;
     }
-    if (max > 1.0 || min < -1.0)
-	printf("*** %f %f\n",max,min);
+
+    // float to short
+    int len = d->output_frames_gen;
+    short *sbuf = (short*)alloca(len*sizeof(short));
+    src_float_to_short_array(fbuf, sbuf, len);
+
+    return len;
+}
+
+int Jack::write(short *buf, int count)
+{
+    // short to float
+    sample_t *fbuf = (sample_t*)alloca(count*sizeof(sample_t));
+    src_short_to_float_array(buf, fbuf, count);
+
+    // resample
+    sample_t *dst = (sample_t*)alloca(count*sizeof(sample_t));
+    SRC_DATA *d = &src_data_output;
+    d->data_in = fbuf;
+    d->input_frames = count;
+    d->data_out = dst;
+    d->output_frames = count;
+    d->src_ratio = samplerate / 8000.0;
+    d->end_of_input = 0;
+    int ret = src_process(src_state_output, d);
+    if (ret != 0)
+    {
+        fprintf(stderr,"write(): %s\n",src_strerror(ret));
+        return 0;
+    }
+
+    // to ringbuffer
+    int len = min(d->input_frames_used, jack_ringbuffer_write_space(jorb)/sizeof(sample_t));
+    jack_ringbuffer_write(jorb, (char*)dst, len*sizeof(sample_t));
+
+    return len;
 }
 
 int Jack::jack_process(jack_nframes_t nframes, void *arg)
@@ -211,14 +181,4 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
 
     return 0;      
 }
-
-void Jack::jack_shutdown_wrapper(void *arg)
-{
-    ((Jack*)arg)->jack_shutdown(arg);
-}
-
-void Jack::jack_shutdown(void *arg)
-{
-    // raise an exception or something
-    exit(1);
-}
+#endif
