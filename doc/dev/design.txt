@@ -1,0 +1,21 @@
+Comments on the design
+----------------------
+
+Protocol::get_codec(int) is a "Library" function, e.g. a lazy lookup somewhat
+like a factory but it only creates the object if one doesn't exist already.
+
+Protocol::codecs is a list of codecs in preferred order, set by the UI
+(although it may have a default value, and should therefore be cleared or
+simply modified by the UI).
+
+Codec::{encode,decode}() needs to return both length read and length written,
+and rather than make a new struct (the libsamplerate way), I chose to use int
+pointers.
+
+I do not intend to flesh out the diagram with all the functions of all the
+classes. The point of the diagram is to give the big picture, not be yet
+another thing to keep in sync.
+
+The UI has a protocol, but it will also register with the Protocol in an
+observer relationship and so the Protocol will have the UI, although it won't
+know it has a UI in particular. Confused? Don't be. ;-)
