@@ -114,20 +114,66 @@ int Jack::jack_process_wrapper(jack_nframes_t nframes, void *arg)
     return ((Jack*)arg)->jack_process(nframes,arg);
 }
 
+void normalize(float *buf, int nframes)
+{
+    float max,min;
+    max = min = 0;
+    for (int i=0; i<nframes; i++)
+    {
+	float s = *(buf+i);
+	if (max < s)
+	    max = s;
+	if (min > s)
+	    min = s;
+    }
+    if (max > 1.0 || min < -1.0)
+	printf("*** %f %f\n",max,min);
+}
+
 int Jack::jack_process(jack_nframes_t nframes, void *arg)
 {
     int ret;
     jack_ringbuffer_data_t vec[2];
+    float *bp, *ep;
     SRC_DATA data;
     sample_t *in  = (sample_t*) jack_port_get_buffer (input_port, nframes);
     sample_t *out = (sample_t*) jack_port_get_buffer (output_port, nframes);
     memset(out,0,sizeof(sample_t)*nframes);
 
+    // output
+    data.src_ratio = jack_get_sample_rate(client) / 8000.0;
+
+    bp = buf;
+    ep = buf + min(
+	    (int)ceil(nframes/data.src_ratio), // resamples to nframes
+	    jack_ringbuffer_read_space(output_rb)/sizeof(short));
+    jack_ringbuffer_get_read_vector(output_rb, vec);
+    for (int i=0; i<2 && bp<ep; i++)
+    {
+	// output_rb->buf (short to float)
+	int len = min(ep-bp,vec[i].len);
+	src_short_to_float_array((short*)vec[i].buf, bp, len);
+	bp += len;
+    }
+    int len = bp - buf;
+    jack_ringbuffer_read_advance(output_rb, len*sizeof(short));
+
+    // buf->out (resample)
+    data.data_in = buf;
+    data.input_frames = len;
+    data.data_out = out;
+    data.output_frames = nframes;
+    data.end_of_input = 0;
+    ret = src_process(src_output_state, &data);
+    if (ret != 0)
+    {
+	fprintf(stderr,"%s\n",src_strerror(ret));
+	return 1;
+    }
+
     // input (in->buf->input_rb)
     if (off_hook)
     {
-	//memset(&data,0,sizeof(data));
-
 	// in->buf (resample)
 	int rb_frames = jack_ringbuffer_write_space(input_rb)/sizeof(short);
 	data.data_in = in;
@@ -142,50 +188,26 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
 	    fprintf(stderr,"%s\n",src_strerror(ret));
 	    return 1;
 	}
+	//printf("%d %d ",data.input_frames_used, data.output_frames_gen);
+
+	//normalize(buf,data.output_frames_gen);
 
 	// buf->input_rb (float to short)
 	float *bp, *ep;
 	bp = buf;
 	ep = buf + min(rb_frames, data.output_frames_gen);
 	jack_ringbuffer_get_write_vector(input_rb, vec);
-	for (int i=0; i<2; i++)
+	for (int i=0; i<2 && bp<ep; i++)
 	{
 	    int len = min(vec[i].len/sizeof(short), ep-bp);
 	    src_float_to_short_array(bp, (short*)(vec[i].buf), len);
 	    bp += len;
 	}
+	//printf("%d \n",bp-buf);
 	jack_ringbuffer_write_advance(input_rb, (bp-buf)*sizeof(short));
-	sem_post(&event_sem);
+        sem_post(&event_sem);
     }
 
-    // output
-    //memset((void*)&data, 0, sizeof(data));
-    data.src_ratio = jack_get_sample_rate(client) / 8000.0;
-    int framecount = 0;
-    jack_ringbuffer_get_read_vector(output_rb, vec);
-    for (int i=0; i<2 && vec[i].len>0; i++)
-    {
-	int vframes = vec[i].len / sizeof(short);
-	// output_rb->buf (short to float)
-	src_short_to_float_array((short*)vec[i].buf, buf, vframes);
-
-	// buf->out (resample)
-	data.data_in = buf;
-	data.input_frames = vframes;
-	data.data_out = out;
-	data.output_frames = nframes;
-	data.end_of_input = 0;
-	ret = src_process(src_output_state, &data);
-	if (ret != 0)
-	{
-	    fprintf(stderr,"%s\n",src_strerror(ret));
-	    return 1;
-	}
-
-	framecount += data.output_frames_gen;
-	jack_ringbuffer_read_advance(output_rb, 
-		data.input_frames_used*sizeof(short));
-    }
 
     return 0;      
 }

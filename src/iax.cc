@@ -26,7 +26,6 @@ int IAXClient::call(char* cidnum, char* cidname, char* ich)
 {
     int ret = iax_call(session, cidnum, cidname, ich, 
 	    NULL, 1, AST_FORMAT_GSM, AST_FORMAT_GSM);
-    audio->off_hook = 1;
     return ret;
 }
 
@@ -79,7 +78,10 @@ void IAXClient::event_loop()
 	    gsm_encode(gsm_handle, src, dst);
 
             //send
-	    ret = iax_send_voice(session, AST_FORMAT_GSM, (char*)dst, 33, 160);
+	    ret = iax_send_voice(session, AST_FORMAT_GSM, 
+		    (char*)dst, sizeof(dst), sizeof(src)/sizeof(short));
+	    if (ret < 0)
+		fprintf(stderr,"error %d in iax_send_voice()\n",ret);
         }
         if (jack_ringbuffer_read_space(iax_event_rb) > 0)
         {
@@ -91,8 +93,13 @@ void IAXClient::event_loop()
 		case IAX_EVENT_ACCEPT:
 		    printf("Call accepted.\n");
 		    break;
+		case IAX_EVENT_REJECT:
+		    printf("Call rejected.\n");
+		    return;
+		    break;
 		case IAX_EVENT_ANSWER:
 		    printf("Call answered.\n");
+		    audio->off_hook = 1;
 		    break;
 		case IAX_EVENT_VOICE:
 		    handle_voice(ev);
@@ -147,7 +154,8 @@ int IAXClient::handle_voice(struct iax_event *ev)
 			sizeof(dst));
 		if (ret < sizeof(dst))
 		    fprintf(stderr,"overrun in handle_voice(): "
-			    "%d bytes.\n", sizeof(dst) - ret);
+			    "%d bytes. (%d)\n", sizeof(dst) - ret, 
+			    jack_ringbuffer_write_space(audio->output_rb));
 	    }
 	    break;
 	}
