@@ -27,6 +27,8 @@ class IAXClient
 	int unquelch();
 
         void event_loop();
+	jack_ringbuffer_t *iax_event_rb;
+
     protected:
         pthread_mutex_t session_mutex;
         struct iax_session *session;
@@ -34,5 +36,6 @@ class IAXClient
         AudioInterface *audio;
         Coder *coder;
 };
+void *iax_event_thread_func(void *arg);
 
 #endif

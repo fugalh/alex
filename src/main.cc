@@ -15,6 +15,7 @@ void sighandler(int sig)
 
 int main(int argc, char **argv)
 {
+    pthread_t iax_event_thread;
     Jack jack("alex");
     GSMCoder gsmc;
     IAXClient iax(&jack, &gsmc);
@@ -23,8 +24,7 @@ int main(int argc, char **argv)
     sleep(10);
     iax.hangup("guten abend");
 
-//    signal(SIGINT, sighandler);
-    while(1)
-        sleep(1);
+    pthread_create(&iax_event_thread, 0, iax_event_thread_func, &iax);
+    pthread_join(iax_event_thread, 0);
     return 0;
 }

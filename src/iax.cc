@@ -1,19 +1,20 @@
 #include "iax.h"
 #include "threads.h"
 
-pthread_mutex_t iax_event_queue_mut = PTHREAD_MUTEX_INITIALIZER;
 sem_t event_sem;
 
 IAXClient::IAXClient(AudioInterface *a, Coder *c) : 
     audio(a), coder(c)
 {
+    sem_init(&event_sem,0,0);
     port = iax_init(IAX_DEFAULT_PORTNO);
     session = iax_session_new();
-    sem_init(&event_sem,0,0)
+    iax_event_rb = jack_ringbuffer_create(sizeof(struct iax_event) * 1000);
 }
 
 IAXClient::~IAXClient()
 {
+    jack_ringbuffer_free(iax_event_rb);
     iax_destroy(session);
     sem_destroy(&event_sem);
 }
@@ -32,3 +33,26 @@ int IAXClient::hangup(char* byemsg)
     return ret;
 }
 
+void *iax_event_thread_func(void *arg)
+{
+    IAXClient *iax = (IAXClient*)arg;
+    jack_ringbuffer_t *rb = iax->iax_event_rb;
+    while(1)
+    {
+	struct iax_event *ev = iax_get_event(1);
+
+	if (jack_ringbuffer_write_space(rb) < sizeof(*ev))
+	{
+	    jack_ringbuffer_write(rb, (char*)ev, sizeof(*ev));
+	    sem_post(&event_sem);
+	}
+	else
+	{
+	    // XXX somebody do something!
+	    fprintf(stderr, "rb full, dropping iax_event!\n");
+	}
+
+	iax_event_free(ev);
+    }
+    return 0;
+}

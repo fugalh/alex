@@ -128,7 +128,7 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
     // input
     ret = jack_ringbuffer_write(input_rb, (char*)in, n);
     if (ret < n) { /* somebody do something! */ }
-    sem_post(event_sem);
+    sem_post(&event_sem);
 
     // output
     ret = jack_ringbuffer_read(output_rb, (char*)out, n);
