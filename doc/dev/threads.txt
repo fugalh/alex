@@ -1,19 +1,11 @@
-alex has three threads: the audio thread, the network thread, and the UI thread.
+alex has two main threads: the protocol thread, and the UI thread.
 
-The audio thread fills and drains the input and output ringbuffers,
-respectively. In the JACK code, the thread is handled automatically. We just
-need to provide the process() callback.
+When using JACK, there is another thread filling and draining ringbuffers
+defined in jack_client.c.
 
-The network thread is basically an event loop. It waits for one of two
-conditions: there is new audio input data available to be sent across the wire,
-or there is incoming network traffic. A semaphore is used to indicate when one
-of these conditions becomes true. I can't think of a good way to wait on a
-semaphore and do a select() on the file descriptor returned by iax_get_fd() at
-the same time, so there is a helper thread (ok, so I lied, there are 4 threads)
-whose job it is to call iax_get_event(), queue the event,  and then post the
-semaphore.
+The driving thread is the network thread. It waits for an incoming event or
+times out, then processes waiting events and sends voice.
 
 The UI thread corresponds to main() and is just like any other UI thread you've
 ever seen. It waits for user input and then acts on it, e.g. by calling
-IAXClient::call(). I don't know if libiax is threadsafe, so all iax_* functions
-are called under the protectin of IAXClient::iax_mutex.
+IAX2Protocol::call().
