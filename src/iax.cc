@@ -41,6 +41,7 @@ void *iax_event_thread_func(void *arg)
     {
 	struct iax_event *ev = iax_get_event(1);
 
+	/*
 	if (jack_ringbuffer_write_space(rb) < sizeof(*ev))
 	{
 	    jack_ringbuffer_write(rb, (char*)ev, sizeof(*ev));
@@ -49,8 +50,10 @@ void *iax_event_thread_func(void *arg)
 	else
 	{
 	    // XXX somebody do something!
-	    fprintf(stderr, "rb full, dropping iax_event!\n");
+	    fprintf(stderr, "rb full, dropping iax_event and quitting!\n");
+	    return 0;
 	}
+	*/
 
 	iax_event_free(ev);
     }
