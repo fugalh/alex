@@ -5,9 +5,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "jack.h"
 #include "threads.h"
+#include <samplerate.h>
 
 Jack::Jack(const char *client_name)
 {
@@ -108,32 +110,69 @@ int Jack::jack_process_wrapper(jack_nframes_t nframes, void *arg)
     return ((Jack*)arg)->jack_process(nframes,arg);
 }
 
+typedef jack_default_audio_sample_t sample_t;
 int Jack::jack_process(jack_nframes_t nframes, void *arg)
 {
     int ret;
-    int n = sizeof (jack_default_audio_sample_t) * nframes;
-    jack_default_audio_sample_t *in = (jack_default_audio_sample_t *) 
-	jack_port_get_buffer (input_port, nframes);
-    jack_default_audio_sample_t *out = (jack_default_audio_sample_t *) 
-	jack_port_get_buffer (output_port, nframes);
+    jack_ringbuffer_data_t vec[2];
+    int n = sizeof(sample_t) * nframes;
+    sample_t *in  = (sample_t*) jack_port_get_buffer (input_port, nframes);
+    sample_t *out = (sample_t*) jack_port_get_buffer (output_port, nframes);
 
     if (!off_hook)
     {
         // enjoy the silence
-        memset(in,0,n);
         memset(out,0,n);
         return 0;
     }
 
     // input
-    ret = jack_ringbuffer_write(input_rb, (char*)in, n);
-    if (ret < n) { /* somebody do something! */ }
+    SRC_DATA data;
+    data.src_ratio = 8000.0 / jack_get_sample_rate(client);
+    sample_t *buf = (sample_t*)alloca(n); // XXX want to use alloca?
+    int framecount = 0;
+    jack_ringbuffer_get_write_vector(input_rb, vec);
+    for (int i=0; i<2 && vec[i].len>0; i++)
+    {
+
+	data.data_in = in + framecount;
+	data.input_frames = nframes - framecount;
+	data.data_out = buf;
+	data.output_frames = vec[i].len / sizeof(short);
+
+	src_simple(&data, SRC_SINC_BEST_QUALITY, 1);
+	src_float_to_short_array((float*)(data.data_out), (short*)(vec[i].buf),
+		data.output_frames_gen);
+
+	jack_ringbuffer_write_advance(input_rb, 
+		data.output_frames_gen * sizeof(short));
+	framecount += data.input_frames_used;
+    }
+    if (framecount < n) { /* somebody do something! */ }
     sem_post(&event_sem);
 
     // output
+    memset(out,0,n);
+    data.src_ratio = (double)jack_get_sample_rate(client) / 8000;
+    framecount = 0;
+    jack_ringbuffer_get_write_vector(output_rb, vec);
+    for (int i=0; i<2 && vec[i].len>0; i++)
+    {
+	data.data_in = buf;
+	data.input_frames = vec[i].len / sizeof(short);
+	data.data_out = out + framecount;
+	data.output_frames = nframes - framecount;
+
+	src_short_to_float_array((short*)(vec[i].buf), (float*)(data.data_in),
+		vec[i].len / sizeof(short));
+	src_simple(&data, SRC_SINC_BEST_QUALITY, 1);
+
+	jack_ringbuffer_read_advance(output_rb, 
+		data.input_frames_used * sizeof(short));
+	framecount += data.output_frames_gen;
+    }
     ret = jack_ringbuffer_read(output_rb, (char*)out, n);
     if (ret < n) { /* somebody do something! */ }
-
 
     return 0;      
 }
