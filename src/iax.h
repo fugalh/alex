@@ -32,8 +32,8 @@ class IAX : public Protocol
         /// Called by the thread function
         void event_loop();
 
-    protected:
         pthread_t thread;
+    protected:
         pthread_mutex_t session_mutex;
         struct iax_session *session;
         int port;
@@ -41,5 +41,6 @@ class IAX : public Protocol
 	int handle_voice(struct iax_event*);
         map<int,Codec*> codec_map;
 };
+void *protocol_thread_func(void *arg);
 
 #endif

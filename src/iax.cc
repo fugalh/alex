@@ -1,6 +1,7 @@
 #include "iax.h"
 #include "codec.h"
 #include "gsm.h"
+#include <pthread.h>
 
 #define BUFSIZE (1024)
 
@@ -15,9 +16,9 @@ IAX::IAX(Audio *a)
 {
     audio = a;
     port = iax_init(IAX_DEFAULT_PORTNO);
+    codecs.push_back(AST_FORMAT_GSM);
     session = iax_session_new();
-
-    pthread_create(&thread, 0, protocol_thread_func, this);
+    pthread_mutex_init(&session_mutex, 0);
 }
 
 IAX::~IAX()
@@ -31,19 +32,23 @@ int IAX::call(char* cidnum, char* cidname, char* ich)
 {
     int cap = 0;
     for (unsigned int i=0; i<codecs.size(); i++)
-        cap &= codecs[i];
+        cap |= codecs[i];
 
     if (codecs.size() < 1)
         return -1; // XXX is this a good return value?
 
+    //pthread_mutex_lock(&session_mutex);
     return iax_call(session, cidnum, cidname, ich, 
 	    NULL, 1, codecs[0], cap);
+    //pthread_mutex_unlock(&session_mutex);
 }
 
 int IAX::hangup(char* byemsg)
 {
+    pthread_mutex_lock(&session_mutex);
     int ret = iax_hangup(session, byemsg);
     audio->off_hook = 0;
+    pthread_mutex_unlock(&session_mutex);
     return ret;
 }
 
@@ -85,14 +90,22 @@ void IAX::event_loop()
         }
 
         short src[BUFSIZE];
-        int srclen = audio->read(src, BUFSIZE);
-        if (srclen > 0)
-        {
-            char dst[BUFSIZE];
-            int dstlen = BUFSIZE;
-            get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
-	    iax_send_voice(session, codecs[0], dst, dstlen, srclen);
-        }
+	int srclen;
+	while ((srclen = audio->read(src, BUFSIZE)) > 0)
+	{
+	    char dst[BUFSIZE];
+	    int dstlen = BUFSIZE;
+	    printf("%d %d %d\n",codecs[0],srclen,dstlen);
+	    get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
+	    if (dstlen > 0)
+	    {
+		pthread_mutex_lock(&session_mutex);
+		iax_send_voice(session, codecs[0], dst, dstlen, srclen);
+		pthread_mutex_unlock(&session_mutex);
+	    }
+	    else
+		fprintf(stderr,"Audio buffer underrun in IAX::event_loop()\n");
+	}
     }
 }
 
@@ -118,7 +131,9 @@ int IAX::handle_voice(struct iax_event *ev)
 
 int IAX::dtmf(const char c)
 {
+    pthread_mutex_lock(&session_mutex);
     return iax_send_dtmf(session, c);
+    pthread_mutex_unlock(&session_mutex);
 }
 
 

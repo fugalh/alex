@@ -59,7 +59,7 @@ void jack_start(void *arg)
 
 	if ((client = jack_client_new ("alex")) == 0) {
 		fprintf (stderr, "jack server not running?\n");
-		return;
+		exit(1);
 	}
 
 	/* tell the JACK server to call `process()' whenever

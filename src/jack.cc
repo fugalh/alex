@@ -28,6 +28,8 @@ Jack::Jack()
         fprintf(stderr,"Error creating src_state_output: %s\n",src_strerror(err));
         // raise an exception?
     }
+    jirb = jack_ringbuffer_create(96000);
+    jorb = jack_ringbuffer_create(96000);
     jack_start();
 }
 
@@ -36,6 +38,8 @@ Jack::~Jack()
     src_delete(src_state_input);
     src_delete(src_state_output);
     jack_stop();
+    jack_ringbuffer_free(jorb);
+    jack_ringbuffer_free(jirb);
 }
 
 int Jack::read(short *buf, int count)
@@ -45,6 +49,9 @@ int Jack::read(short *buf, int count)
     // XXX Think about doing this with vec
     int fbuf_len = min((unsigned int)count,jack_ringbuffer_read_space(jirb)/sizeof(sample_t));
     int fbuf_size = fbuf_len * sizeof(sample_t);
+    printf("count = %d\tfbuf_len = %d\n",count,fbuf_len);
+    if (fbuf_size <= 0)
+	return 0;
     sample_t *fbuf = (sample_t*)alloca(fbuf_size);
     jack_ringbuffer_read(jirb, (char*)fbuf, fbuf_size);
 
