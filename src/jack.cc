@@ -151,8 +151,7 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
 	for (int i=0; i<2; i++)
 	{
 	    int len = min(vec[i].len/sizeof(short), ep-bp);
-	    src_float_to_short_array(bp, (short*)(vec[i].buf), 
-		    len*sizeof(short));
+	    src_float_to_short_array(bp, (short*)(vec[i].buf), len);
 	    bp += len;
 	}
 	jack_ringbuffer_write_advance(input_rb, (bp-buf)*sizeof(short));
