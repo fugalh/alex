@@ -100,6 +100,7 @@ int Jack::write(short *buf, int count)
     return len;
 }
 
+#if 0
 int Jack::jack_process(jack_nframes_t nframes, void *arg)
 {
     int ret;

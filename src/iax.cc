@@ -33,8 +33,6 @@ int IAX2Protocol::call(char* cidnum, char* cidname, char* ich)
 {
     return iax_call(session, cidnum, cidname, ich, 
 	    NULL, 1, AST_FORMAT_GSM, AST_FORMAT_GSM);
-    audio->off_hook = 1;
-    return ret;
 }
 
 int IAX2Protocol::hangup(char* byemsg)
@@ -51,24 +49,6 @@ void IAX2Protocol::event_loop()
 	struct iax_event *ev = iax_get_event(1);
         if (ev)
         {
-	    int ret;
-	    gsm_signal src[160];
-	    gsm_frame dst;
-
-	    //read
-	    jack_ringbuffer_read(audio->input_rb, (char*)src, sizeof(src));
-
-            //encode
-	    gsm_encode(gsm_handle, src, dst);
-
-            //send
-	    ret = iax_send_voice(session, AST_FORMAT_GSM, (char*)dst, 33, 160);
-        }
-        if (jack_ringbuffer_read_space(iax_event_rb) > 0)
-        {
-            struct iax_event *ev;
-            jack_ringbuffer_read(iax_event_rb, (char*)&ev, sizeof(ev));
-
 	    switch (ev->etype)
 	    {
 		case IAX_EVENT_ACCEPT:
@@ -80,6 +60,7 @@ void IAX2Protocol::event_loop()
 		    break;
 		case IAX_EVENT_ANSWER:
 		    printf("Call answered.\n");
+		    audio->off_hook = 1;
 		    break;
 		case IAX_EVENT_VOICE:
 		    handle_voice(ev);
