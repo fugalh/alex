@@ -4,17 +4,17 @@
 #include "ringbuffer.h"
 #include <samplerate.h>
 
-class AudioInterface
+class Audio
 {
     public:
-        AudioInterface();
-        ~AudioInterface();
+        Audio();
+        ~Audio();
 
-        /* Fill these ringbuffers with 8000Hz 16-bit data. */
-        jack_ringbuffer_t *input_rb;	// i.e. mouthpiece
-        jack_ringbuffer_t *output_rb;	// i.e. earpiece
-
+        virtual int read(short *buf, int count) = 0;
+        virtual int write(short *buf, int count) = 0;
         int off_hook;
+
+    protected:
 	SRC_STATE *src_input_state;
 	SRC_STATE *src_output_state;
 };

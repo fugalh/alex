@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-AudioInterface::AudioInterface() : off_hook(0)
+Audio::Audio() : off_hook(0)
 {
     /* Set up the ringbuffers. 
      * Ensure that they are evenly divisible by 320 (160 * sizeof(gsm_signal))
@@ -25,7 +25,7 @@ AudioInterface::AudioInterface() : off_hook(0)
     }
 }
 
-AudioInterface::~AudioInterface()
+Audio::~Audio()
 {
     /* free ringbuffers */
     jack_ringbuffer_free(input_rb);
