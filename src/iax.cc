@@ -95,12 +95,20 @@ void IAXClient::event_loop()
 
             iax_event_free(ev);
         }
-	int n;
-        if ((n = jack_ringbuffer_read_space(audio->input_rb)) > 0)
+        while (jack_ringbuffer_read_space(audio->input_rb) >= 33)
         {
-	    jack_ringbuffer_read_advance(audio->input_rb, n); // temporary
+	    int ret;
+	    gsm_signal src[160];
+	    gsm_frame dst;
+
+	    //read
+	    jack_ringbuffer_read(audio->input_rb, (char*)src, sizeof(src));
+
             //encode
+	    gsm_encode(gsm_handle, src, dst);
+
             //send
+	    ret = iax_send_voice(session, AST_FORMAT_GSM, (char*)dst, 33, 160);
         }
     }
 }
@@ -148,4 +156,9 @@ int IAXClient::handle_voice(struct iax_event *ev)
 	    return 1;
     }
     return 0;
+}
+
+int IAXClient::dtmf(const char c)
+{
+    return iax_send_dtmf(session, c);
 }
