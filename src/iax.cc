@@ -13,3 +13,16 @@ IAXClient::~IAXClient()
 }
 
 
+int IAXClient::call(char* cidnum, char* cidname, char* ich)
+{
+    int ret = iax_call(session, cidnum, cidname, ich, 
+	    NULL, 0, coder->format, 0);
+    return ret;
+}
+
+int IAXClient::hangup(char* byemsg)
+{
+    int ret = iax_hangup(session, byemsg);
+    return ret;
+}
+

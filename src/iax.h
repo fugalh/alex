@@ -17,11 +17,11 @@ class IAXClient
         ~IAXClient();
 
 	// NB: ich = IAX Call Handle (e.g. user:secret@host/extension)
-	int call(string cidnum, string cidname, string ich);
+	int call(char* cidnum, char* cidname, char* ich);
 	int answer();
-	int hangup(string byemsg);
+	int hangup(char* byemsg);
 	int dtmf(const char);
-	int reg(string hostname, string peer, string secret, int refresh);
+	int reg(char* hostname, char* peer, char* secret, int refresh);
 	int quelch();
 	int unquelch();
     protected:
