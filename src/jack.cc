@@ -6,16 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <jack/jack.h>
 #include "jack.h"
 
-Jack::Jack()
+Jack::Jack(const char *client_name)
 {
     const char **ports;
 
     /* try to become a client of the JACK server */
 
-    if ((client = jack_client_new ("alex")) == 0) 
+    if ((client = jack_client_new (client_name)) == 0) 
     {
 	fprintf (stderr, "jack server not running?\n");
 	exit(1); // XXX maybe an exception?
@@ -25,14 +24,14 @@ Jack::Jack()
        there is work to be done.
        */
 
-    jack_set_process_callback (client, &jack_process, 0);
+    jack_set_process_callback (client, &jack_process_wrapper, this);
 
     /* tell the JACK server to call `jack_shutdown()' if
        it ever shuts down, either entirely, or if it
        just decides to stop calling us.
        */
 
-    jack_on_shutdown (client, &jack_shutdown, 0);
+    //jack_on_shutdown (client, &jack_shutdown_wrapper, this);
 
     /* display the current sample rate. 
     */
@@ -89,6 +88,7 @@ Jack::Jack()
 
 Jack::~Jack()
 {
+    jack_deactivate(client);
     jack_client_close (client);
 }
 
@@ -96,16 +96,21 @@ Jack::~Jack()
  * The process callback for this JACK application.
  * It is called by JACK at the appropriate times.
  */
+int Jack::jack_process_wrapper(jack_nframes_t nframes, void *arg)
+{
+    return ((Jack*)arg)->jack_process(nframes,arg);
+}
+
 int Jack::jack_process(jack_nframes_t nframes, void *arg)
 {
     int ret;
     int n = sizeof (jack_default_audio_sample_t) * nframes;
     jack_default_audio_sample_t *in = (jack_default_audio_sample_t *) 
-	jack_port_get_buffer (instance()->input_port, nframes);
+	jack_port_get_buffer (input_port, nframes);
     jack_default_audio_sample_t *out = (jack_default_audio_sample_t *) 
-	jack_port_get_buffer (instance()->output_port, nframes);
+	jack_port_get_buffer (output_port, nframes);
 
-    if (!instance()->off_hook)
+    if (!off_hook)
     {
         // enjoy the silence
         memset(in,0,n);
@@ -114,26 +119,23 @@ int Jack::jack_process(jack_nframes_t nframes, void *arg)
     }
 
     // input
-    ret = jack_ringbuffer_write(instance()->input_rb, (char*)in, n);
+    ret = jack_ringbuffer_write(input_rb, (char*)in, n);
     if (ret < n) { /* somebody do something! */ }
 
     // output
-    ret = jack_ringbuffer_read(instance()->output_rb, (char*)out, n);
+    ret = jack_ringbuffer_read(output_rb, (char*)out, n);
     if (ret < n) { /* somebody do something! */ }
 
     return 0;      
+}
+
+void Jack::jack_shutdown_wrapper(void *arg)
+{
+    ((Jack*)arg)->jack_shutdown(arg);
 }
 
 void Jack::jack_shutdown(void *arg)
 {
     // raise an exception or something
     exit(1);
-}
-
-Jack* Jack::_instance = 0;
-Jack* Jack::instance()
-{
-    if (_instance == 0)
-        _instance = new Jack();
-    return _instance;
 }

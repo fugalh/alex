@@ -6,8 +6,8 @@ AudioInterface::AudioInterface() : off_hook(0)
      * Ensure that they are evenly divisible by 320 (160 * sizeof(gsm_signal))
      * so that we will never have to worry about gsm_encode wrapping around
      * the ring buffer. */
-    input_rb  = jack_ringbuffer_create(SAMPLERATE * 5); // 5 seconds
-    output_rb = jack_ringbuffer_create(SAMPLERATE * 5); // 5 seconds
+    input_rb  = jack_ringbuffer_create(RB_SIZE); // 5 seconds
+    output_rb = jack_ringbuffer_create(RB_SIZE); // 5 seconds
 }
 
 AudioInterface::~AudioInterface()

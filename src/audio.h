@@ -1,6 +1,7 @@
-#include <jack/ringbuffer.h>
+#ifndef AUDIO_H
+#define AUDIO_H
 
-#define SAMPLERATE 8000
+#include "ringbuffer.h"
 
 class AudioInterface
 {
@@ -14,3 +15,4 @@ class AudioInterface
 
         int off_hook;
 };
+#endif // ifndef AUDIO_H

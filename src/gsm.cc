@@ -1,7 +1,8 @@
 #include "gsm.h"
 
-int GSMCoder::encode(jack_ringbuffer_t *in, jack_ringbuffer_t *out)
-{
+int GSMCoder::encode(jack_ringbuffer_t *in)
+{ 
+    jack_ringbuffer_t *out = encoded_rb;
     gsm_signal src[160];
     gsm_frame dst;
     int n = 0;
@@ -16,8 +17,9 @@ int GSMCoder::encode(jack_ringbuffer_t *in, jack_ringbuffer_t *out)
     return n;
 }
 
-int GSMCoder::decode(jack_ringbuffer_t *in, jack_ringbuffer_t *out)
+int GSMCoder::decode(jack_ringbuffer_t *in)
 {
+    jack_ringbuffer_t *out = decoded_rb;
     gsm_frame src;
     gsm_signal dst[160];
     int n = 0;
