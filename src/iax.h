@@ -36,6 +36,7 @@ class IAXClient
         AudioInterface *audio;
         Coder *coder;
 };
-void *iax_event_thread_func(void *arg);
+void *iax_network_loop(void *arg);
+void *iax_event_loop(void *arg);
 
 #endif

@@ -15,17 +15,17 @@ void sighandler(int sig)
 
 int main(int argc, char **argv)
 {
-    pthread_t iax_event_thread;
+    pthread_t iax_thread;
     Jack jack("alex");
     GSMCoder gsmc;
     IAXClient iax(&jack, &gsmc);
 
-    pthread_create(&iax_event_thread, 0, iax_event_thread_func, &iax);
+    pthread_create(&iax_thread, 0, iax_event_loop, &iax);
 
     iax.call("2224","JS Bach","hans:m00se@fugal.net/s");
-    sleep(10);
-    iax.hangup("guten abend");
+    //sleep(10);
+    //iax.hangup("guten abend");
 
-    pthread_join(iax_event_thread, 0);
+    pthread_join(iax_thread, 0);
     return 0;
 }
