@@ -6,11 +6,11 @@
 int main(int argc, char **argv)
 {
     Jack *jack = new Jack("alex");
-    //GSMCoder *gsmc = new GSMCoder();
-    //IAXClient *iax = new IAXClient(jack, gsmc);
+    GSMCoder *gsmc = new GSMCoder();
+    IAXClient *iax = new IAXClient(jack, gsmc);
 
-    //delete iax;
+    delete iax;
     delete jack;
-    //delete gsmc;
+    delete gsmc;
     return 0;
 }

@@ -14,6 +14,7 @@ class GSMCoder : public Coder
 
     protected:
         gsm handle;
+	static int format;
 };
 
 #endif

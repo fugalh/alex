@@ -1,4 +1,7 @@
 #include "gsm.h"
+#include <iax/iax-client.h>
+
+int GSMCoder::format = AST_FORMAT_GSM;
 
 int GSMCoder::encode(jack_ringbuffer_t *in)
 { 

@@ -15,6 +15,7 @@ class Coder
 
         jack_ringbuffer_t *encoded_rb;
         jack_ringbuffer_t *decoded_rb;
+	static  int format;
 };
 
 #endif
