@@ -16,6 +16,7 @@ int main(int argc, char **argv)
     Jack jack;
     IAX iax(&jack);
 
+    signal(SIGINT, sighandler);
     pthread_create(&iax.thread, 0, protocol_thread_func, &iax);
 
     if (argc > 1)
