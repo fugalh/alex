@@ -1,6 +1,7 @@
 #include "iax.h"
 #include "codec.h"
 #include "gsm.h"
+#include "util.h"
 #include <pthread.h>
 
 #define BUFSIZE (1024)
@@ -37,29 +38,39 @@ int IAX::call(char* cidnum, char* cidname, char* ich)
     if (codecs.size() < 1)
         return -1; // XXX is this a good return value?
 
-    //pthread_mutex_lock(&session_mutex);
+    printf("Calling %s.\n",ich);
     return iax_call(session, cidnum, cidname, ich, 
 	    NULL, 1, codecs[0], cap);
-    //pthread_mutex_unlock(&session_mutex);
 }
 
 int IAX::hangup(char* byemsg)
 {
-    pthread_mutex_lock(&session_mutex);
     int ret = iax_hangup(session, byemsg);
     audio->off_hook = 0;
-    pthread_mutex_unlock(&session_mutex);
     return ret;
 }
 
 void IAX::event_loop()
 {
+    struct iax_event *ev;
     while(1)
     {
-	struct iax_event *ev = iax_get_event(1);
-        printf(".");
+        // select with timeout
+        fd_set readfds;
+        int iaxfd = iax_get_fd();
+        FD_ZERO(&readfds);
+        FD_SET(iaxfd, &readfds);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = min(20000, iax_time_to_next_event());
+        select(iaxfd+1, &readfds, 0, 0, &timeout);
+
+
+        if (FD_ISSET(iaxfd, &readfds))
+            ev = iax_get_event(1);
         if (ev)
         {
+            printf("o");
 	    switch (ev->etype)
 	    {
 		case IAX_EVENT_ACCEPT:
@@ -74,6 +85,7 @@ void IAX::event_loop()
 		    audio->off_hook = 1;
 		    break;
 		case IAX_EVENT_VOICE:
+                    printf("v");
 		    handle_voice(ev);
 		    break;
 		case IAX_EVENT_PONG:
@@ -90,23 +102,20 @@ void IAX::event_loop()
             iax_event_free(ev);
         }
 
-        short src[BUFSIZE];
-	int srclen;
-	while ((srclen = audio->read(src, BUFSIZE)) > 0)
-	{
-	    char dst[BUFSIZE];
-	    int dstlen = BUFSIZE;
-	    printf("%d %d %d\n",codecs[0],srclen,dstlen);
-	    get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
-	    if (dstlen > 0)
-	    {
-		pthread_mutex_lock(&session_mutex);
-		iax_send_voice(session, codecs[0], dst, dstlen, srclen);
-		pthread_mutex_unlock(&session_mutex);
-	    }
-	    else
-		fprintf(stderr,"Audio buffer underrun in IAX::event_loop()\n");
-	}
+        if (audio->off_hook)
+        {
+            short src[BUFSIZE];
+            int srclen;
+            srclen = audio->read(src, BUFSIZE);
+            char dst[BUFSIZE];
+            int dstlen = BUFSIZE;
+            get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
+            if (dstlen > 0)
+            {
+                iax_send_voice(session, codecs[0], dst, dstlen, srclen);
+                printf("V");
+            }
+        }
     }
 }
 
@@ -132,9 +141,7 @@ int IAX::handle_voice(struct iax_event *ev)
 
 int IAX::dtmf(const char c)
 {
-    pthread_mutex_lock(&session_mutex);
     return iax_send_dtmf(session, c);
-    pthread_mutex_unlock(&session_mutex);
 }
 
 
