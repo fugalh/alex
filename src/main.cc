@@ -24,6 +24,7 @@ int main(int argc, char **argv)
     iax.hangup("guten abend");
 
     signal(SIGINT, sighandler);
-    pthread_cond_wait(&stopcond, &stopmutex);
+    while(1)
+        sleep(1);
     return 0;
 }

@@ -7,6 +7,7 @@
 #include <stddef.h> // for size_t in <iax/iax-client.h>
 #include <iax/iax-client.h>
 #include <string>
+#include <pthread.h>
 
 using std::string;
 
@@ -24,7 +25,10 @@ class IAXClient
 	int reg(char* hostname, char* peer, char* secret, int refresh);
 	int quelch();
 	int unquelch();
+
+        void event_loop();
     protected:
+        pthread_mutex_t session_mutex;
         struct iax_session *session;
         int port;
         AudioInterface *audio;
