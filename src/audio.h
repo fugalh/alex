@@ -8,7 +8,7 @@ class Audio
 {
     public:
         Audio();
-        ~Audio();
+        virtual ~Audio();
 
         virtual int read(short *buf, int count) = 0;
         virtual int write(short *buf, int count) = 0;

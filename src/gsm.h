@@ -1,17 +1,17 @@
 #ifndef ALEX_GSM_H
 #define ALEX_GSM_H
 
-#include "coder.h"
+#include "codec.h"
 #include <gsm.h>
-#include <iax/iax-client.h>
 
-class GSMCoder : public Coder
+class GSM : public Codec
 {
     public:
-        GSMCoder() { format = AST_FORMAT_GSM; handle = gsm_create(); }
-        ~GSMCoder() { gsm_destroy(handle); }
-        int encode(jack_ringbuffer_t *in);
-        int decode(jack_ringbuffer_t *in);
+        GSM() { handle = gsm_create(); }
+        virtual ~GSM() { gsm_destroy(handle); }
+        void encode(short *src, int *srclen, char *dst, int *dstlen);
+        void decode(char *src, int *srclen, short *dst, int *dstlen);
+
     protected:
         gsm handle;
 };

@@ -5,28 +5,23 @@
 #include <signal.h>
 #include <pthread.h>
 
-pthread_mutex_t stopmutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t stopcond = PTHREAD_COND_INITIALIZER;
 void sighandler(int sig)
 {
     if (sig == SIGINT)
-	pthread_cond_signal(&stopcond);
+        exit(0);
 }
 
 int main(int argc, char **argv)
 {
-    pthread_t iax_thread;
-    Jack jack("alex");
-    GSMCoder gsmc;
-    IAXClient iax(&jack, &gsmc);
-
-    pthread_create(&iax_thread, 0, iax_event_loop, &iax);
+    Jack jack;
+    IAX iax(&jack);
 
     if (argc > 1)
 	iax.call("2224","JS Bach",argv[1]);
     else
 	iax.call("2224","JS Bach","test:foobar@fugal.net/s");
 
-    pthread_join(iax_thread, 0);
+    while (1) { sleep(1); }
+
     return 0;
 }

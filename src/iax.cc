@@ -1,48 +1,53 @@
 #include "iax.h"
 #include "codec.h"
+#include "gsm.h"
 
 #define BUFSIZE (1024)
 
 void *protocol_thread_func(void *arg)
 {
-    IAX2Protocol *iax = (IAX2Protocol*)arg;
+    IAX *iax = (IAX*)arg;
     iax->event_loop();
     return 0;
 }
 
-IAX2Protocol::IAX2Protocol(Audio *audio, int format) : audio(audio)
+IAX::IAX(Audio *a)
 {
+    audio = a;
     port = iax_init(IAX_DEFAULT_PORTNO);
     session = iax_session_new();
-    gsm_handle = gsm_create();
-    set_codec(format);
 
     pthread_create(&thread, 0, protocol_thread_func, this);
 }
 
-IAX2Protocol::~IAX2Protocol()
+IAX::~IAX()
 {
     pthread_cancel(thread);
     iax_destroy(session);
-    gsm_destroy(gsm_handle);
-    if (codec) delete codec;
 }
 
 
-int IAX2Protocol::call(char* cidnum, char* cidname, char* ich)
+int IAX::call(char* cidnum, char* cidname, char* ich)
 {
+    int cap = 0;
+    for (unsigned int i=0; i<codecs.size(); i++)
+        cap &= codecs[i];
+
+    if (codecs.size() < 1)
+        return -1; // XXX is this a good return value?
+
     return iax_call(session, cidnum, cidname, ich, 
-	    NULL, 1, AST_FORMAT_GSM, AST_FORMAT_GSM);
+	    NULL, 1, codecs[0], cap);
 }
 
-int IAX2Protocol::hangup(char* byemsg)
+int IAX::hangup(char* byemsg)
 {
     int ret = iax_hangup(session, byemsg);
     audio->off_hook = 0;
     return ret;
 }
 
-void IAX2Protocol::event_loop()
+void IAX::event_loop()
 {
     while(1)
     {
@@ -85,15 +90,16 @@ void IAX2Protocol::event_loop()
         {
             char dst[BUFSIZE];
             int dstlen = BUFSIZE;
-            codec->encode(src, &srclen, dst, &dstlen);
-	    iax_send_voice(session, codec_format, dst, dstlen, srclen);
+            get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
+	    iax_send_voice(session, codecs[0], dst, dstlen, srclen);
         }
     }
 }
 
-int IAX2Protocol::handle_voice(struct iax_event *ev)
+int IAX::handle_voice(struct iax_event *ev)
 {
-    if (ev->subclass == codec_format)
+    Codec *codec = get_codec(ev->subclass);
+    if (codec)
     {
         char *src = (char*)ev->data;
         int srclen = ev->datalen;
@@ -103,58 +109,32 @@ int IAX2Protocol::handle_voice(struct iax_event *ev)
         audio->write(dst,dstlen);
     }
     else
+    {
         fprintf(stderr,"Unknown voice format %d.\n", ev->subclass);
         return 1;
-#if 0
-    switch (ev->subclass)
-    {
-	case AST_FORMAT_GSM:
-	{
-	    if (ev->datalen % 33)
-	    {
-		fprintf(stderr,"Bad GSM data (len != 0 mod 33).\n");
-		return 1;
-	    }
-
-	    // convert from gsm (ev->data) to 8000hz short (audio->output_rb)
-	    gsm_byte *src;
-	    gsm_signal dst[160];
-	    for (int i=0; i < ev->datalen/33; i += 33)
-	    {
-		src = (gsm_byte*)ev->data + i;
-		gsm_decode(gsm_handle, src, dst);
-		int ret = jack_ringbuffer_write(audio->output_rb, (char*)dst, 
-			sizeof(dst));
-		if (ret < sizeof(dst))
-		    fprintf(stderr,"overrun in handle_voice(): "
-			    "%d bytes. (%d)\n", sizeof(dst) - ret, 
-			    jack_ringbuffer_write_space(audio->output_rb));
-	    }
-	    break;
-	}
-	default:
-	    fprintf(stderr,"Unknown voice format %d.\n", ev->subclass);
-	    return 1;
     }
-#endif
     return 0;
 }
 
-int IAX2Protocol::dtmf(const char c)
+int IAX::dtmf(const char c)
 {
     return iax_send_dtmf(session, c);
 }
 
-void IAX2Protocol::set_codec(int format)
+
+Codec *IAX::get_codec(int format)
 {
-    switch(format)
+    if (codec_map.count(format) < 1)
     {
-        case AST_FORMAT_GSM:
-            codec_format = format;
-            codec = new GSM();
-            break;
-        default:
-            fprintf(stderr,"Unrecognized format in set_codec(%d)\n",format);
-            codec = 0;
+        switch (format)
+        {
+            case AST_FORMAT_GSM:
+                codec_map[format] = new GSM();
+                break;
+            default:
+                fprintf(stderr,"Unknown format %d in IAX::get_codec()\n");
+                return 0;
+        }
     }
+    return codec_map[format];
 }

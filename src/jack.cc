@@ -43,7 +43,7 @@ int Jack::read(short *buf, int count)
     SRC_DATA *d = &src_data_input;
 
     // XXX Think about doing this with vec
-    int fbuf_len = min(count,jack_ringbuffer_read_space(jirb)/sizeof(sample_t));
+    int fbuf_len = min((unsigned int)count,jack_ringbuffer_read_space(jirb)/sizeof(sample_t));
     int fbuf_size = fbuf_len * sizeof(sample_t);
     sample_t *fbuf = (sample_t*)alloca(fbuf_size);
     jack_ringbuffer_read(jirb, (char*)fbuf, fbuf_size);
@@ -94,7 +94,7 @@ int Jack::write(short *buf, int count)
     }
 
     // to ringbuffer
-    int len = min(d->input_frames_used, jack_ringbuffer_write_space(jorb)/sizeof(sample_t));
+    int len = min((unsigned int)d->input_frames_used, jack_ringbuffer_write_space(jorb)/sizeof(sample_t));
     jack_ringbuffer_write(jorb, (char*)dst, len*sizeof(sample_t));
 
     return len;

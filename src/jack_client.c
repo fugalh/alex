@@ -14,6 +14,7 @@ jack_client_t *client;
 jack_ringbuffer_t *jirb; // Jack input ringbuffer
 jack_ringbuffer_t *jorb; // Jack output ringbuffer
 int *jack_off_hook;
+int samplerate;
 
 /**
  * The process callback for this JACK application.

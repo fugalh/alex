@@ -2,36 +2,36 @@
 #include <iax/iax-client.h>
 
 
-int GSMCoder::encode(jack_ringbuffer_t *in)
+void GSM::encode(short *src, int *srclen, char *dst, int *dstlen)
 { 
-    jack_ringbuffer_t *out = encoded_rb;
-    gsm_signal src[160];
-    gsm_frame dst;
-    int n = 0;
-    while (jack_ringbuffer_read_space(in) >= sizeof(src) && 
-            jack_ringbuffer_write_space(out) >= sizeof(dst))
+    gsm_signal *sbp = src;
+    gsm_signal *sep = src + *srclen;
+    gsm_byte   *dbp = (gsm_byte*)dst;
+    gsm_byte   *dep = (gsm_byte*)dst + *dstlen;
+
+    while ((sep-sbp) >= 160 && (dep-dbp) >= 33)
     {
-        jack_ringbuffer_read(in,(char*)src,sizeof(src));
-        gsm_encode(handle,src,dst);
-        jack_ringbuffer_write(out,(char*)dst,sizeof(dst));
-        n += sizeof(dst);
+        gsm_encode(handle, sbp, dbp);
+        sbp += 160;
+        dbp += 33;
     }
-    return n;
+    *srclen = sbp - src;
+    *dstlen = dbp - (gsm_byte*)dst;
 }
 
-int GSMCoder::decode(jack_ringbuffer_t *in)
-{
-    jack_ringbuffer_t *out = decoded_rb;
-    gsm_frame src;
-    gsm_signal dst[160];
-    int n = 0;
-    while (jack_ringbuffer_read_space(in) >= sizeof(src) && 
-            jack_ringbuffer_write_space(out) >= sizeof(dst))
+void GSM::decode(char *src, int *srclen, short *dst, int *dstlen)
+{ 
+    gsm_byte   *sbp = (gsm_byte*)src;
+    gsm_byte   *sep = (gsm_byte*)src + *srclen;
+    gsm_signal *dbp = dst;
+    gsm_signal *dep = dst + *dstlen;
+
+    while ((sep-sbp) >= 33 && (dep-dbp) >= 160)
     {
-        jack_ringbuffer_read(in,(char*)src,sizeof(src));
-        gsm_decode(handle,src,dst);
-        jack_ringbuffer_write(out,(char*)dst,sizeof(dst));
-        n += sizeof(dst);
+        gsm_decode(handle, sbp, dbp);
+        sbp += 33;
+        dbp += 160;
     }
-    return n;
+    *srclen = sbp - (gsm_byte*)src;
+    *dstlen = dbp - dst;
 }

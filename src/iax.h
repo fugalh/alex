@@ -7,17 +7,16 @@
 
 #include <stddef.h> // for size_t in <iax/iax-client.h>
 #include <iax/iax-client.h>
-#include <string>
 #include <pthread.h>
 #include <gsm.h>
+#include <map>
+using std::map;
 
-using std::string;
-
-class IAX2Protocol : public Protocol
+class IAX : public Protocol
 {
     public:
-        IAX2Protocol(Audio*, int format);
-        ~IAX2Protocol();
+        IAX(Audio*);
+        virtual ~IAX();
 
 	// NB: ich = IAX Call Handle (e.g. user:secret@host/extension)
 	int call(char* cidnum, char* cidname, char* ich);
@@ -28,10 +27,11 @@ class IAX2Protocol : public Protocol
 	int quelch();
 	int unquelch();
 
-        void event_loop();
-        void set_codec(int /* e.g. AST_FORMAT_GSM */);
+        Codec *get_codec(int format /* e.g. AST_FORMAT_GSM */);
 
-        Audio *audio;
+        /// Called by the thread function
+        void event_loop();
+
     protected:
         pthread_t thread;
         pthread_mutex_t session_mutex;
@@ -39,9 +39,7 @@ class IAX2Protocol : public Protocol
         int port;
 
 	int handle_voice(struct iax_event*);
-        gsm gsm_handle;
-        int codec_format; // e.g. AST_FORMAT_GSM
-        Codec *codec;
+        map<int,Codec*> codec_map;
 };
 
 #endif
