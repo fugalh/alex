@@ -1,8 +1,9 @@
 #ifndef ALEX_IAX_H
 #define ALEX_IAX_H
 
+#include "protocol.h"
 #include "audio.h"
-#include "coder.h"
+#include "codec.h"
 
 #include <stddef.h> // for size_t in <iax/iax-client.h>
 #include <iax/iax-client.h>
@@ -12,11 +13,11 @@
 
 using std::string;
 
-class IAXClient
+class IAX2Protocol : public Protocol
 {
     public:
-        IAXClient(AudioInterface*, Coder*);
-        ~IAXClient();
+        IAX2Protocol(Audio*, int format);
+        ~IAX2Protocol();
 
 	// NB: ich = IAX Call Handle (e.g. user:secret@host/extension)
 	int call(char* cidnum, char* cidname, char* ich);
@@ -28,19 +29,19 @@ class IAXClient
 	int unquelch();
 
         void event_loop();
-	jack_ringbuffer_t *iax_event_rb;
+        void set_codec(int /* e.g. AST_FORMAT_GSM */);
 
+        Audio *audio;
     protected:
+        pthread_t thread;
         pthread_mutex_t session_mutex;
         struct iax_session *session;
         int port;
-        AudioInterface *audio;
-        Coder *coder;
 
 	int handle_voice(struct iax_event*);
         gsm gsm_handle;
+        int codec_format; // e.g. AST_FORMAT_GSM
+        Codec *codec;
 };
-void *iax_network_loop(void *arg);
-void *iax_event_loop(void *arg);
 
 #endif

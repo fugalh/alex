@@ -1,71 +1,55 @@
 #include "iax.h"
-#include "threads.h"
+#include "codec.h"
 
-sem_t event_sem;
+#define BUFSIZE (1024)
 
-IAXClient::IAXClient(AudioInterface *a, Coder *c) : 
-    audio(a), coder(c)
+void *protocol_thread_func(void *arg)
 {
-    sem_init(&event_sem,0,0);
+    IAX2Protocol *iax = (IAX2Protocol*)arg;
+    iax->event_loop();
+    return 0;
+}
+
+IAX2Protocol::IAX2Protocol(Audio *audio, int format) : audio(audio)
+{
     port = iax_init(IAX_DEFAULT_PORTNO);
     session = iax_session_new();
     gsm_handle = gsm_create();
-    iax_event_rb = jack_ringbuffer_create(sizeof(struct iax_event*) * 10000);
+    set_codec(format);
+
+    pthread_create(&thread, 0, protocol_thread_func, this);
 }
 
-IAXClient::~IAXClient()
+IAX2Protocol::~IAX2Protocol()
 {
-    jack_ringbuffer_free(iax_event_rb);
+    pthread_cancel(thread);
     iax_destroy(session);
-    sem_destroy(&event_sem);
     gsm_destroy(gsm_handle);
+    if (codec) delete codec;
 }
 
 
-int IAXClient::call(char* cidnum, char* cidname, char* ich)
+int IAX2Protocol::call(char* cidnum, char* cidname, char* ich)
 {
-    int ret = iax_call(session, cidnum, cidname, ich, 
+    return iax_call(session, cidnum, cidname, ich, 
 	    NULL, 1, AST_FORMAT_GSM, AST_FORMAT_GSM);
+    audio->off_hook = 1;
     return ret;
 }
 
-int IAXClient::hangup(char* byemsg)
+int IAX2Protocol::hangup(char* byemsg)
 {
     int ret = iax_hangup(session, byemsg);
     audio->off_hook = 0;
     return ret;
 }
 
-void *iax_network_loop(void *arg)
+void IAX2Protocol::event_loop()
 {
-    IAXClient *iax = (IAXClient*)arg;
-    jack_ringbuffer_t *rb = iax->iax_event_rb;
     while(1)
     {
 	struct iax_event *ev = iax_get_event(1);
-	if (!ev) continue; 
-
-	if (jack_ringbuffer_write_space(rb) >= sizeof(ev))
-	{
-	    jack_ringbuffer_write(rb, (char*)&ev, sizeof(ev));
-	    sem_post(&event_sem);
-	}
-	else
-	{
-	    // XXX somebody do something!
-	    fprintf(stderr, "rb full, dropping iax_event and quitting!\n");
-	    return 0;
-	}
-    }
-    return 0;
-}
-
-void IAXClient::event_loop()
-{
-    while (1)
-    {
-        sem_wait(&event_sem);
-        while (jack_ringbuffer_read_space(audio->input_rb) >= 33)
+        if (ev)
         {
 	    int ret;
 	    gsm_signal src[160];
@@ -78,10 +62,7 @@ void IAXClient::event_loop()
 	    gsm_encode(gsm_handle, src, dst);
 
             //send
-	    ret = iax_send_voice(session, AST_FORMAT_GSM, 
-		    (char*)dst, sizeof(dst), sizeof(src)/sizeof(short));
-	    if (ret < 0)
-		fprintf(stderr,"error %d in iax_send_voice()\n",ret);
+	    ret = iax_send_voice(session, AST_FORMAT_GSM, (char*)dst, 33, 160);
         }
         if (jack_ringbuffer_read_space(iax_event_rb) > 0)
         {
@@ -99,7 +80,6 @@ void IAXClient::event_loop()
 		    break;
 		case IAX_EVENT_ANSWER:
 		    printf("Call answered.\n");
-		    audio->off_hook = 1;
 		    break;
 		case IAX_EVENT_VOICE:
 		    handle_voice(ev);
@@ -117,22 +97,34 @@ void IAXClient::event_loop()
 
             iax_event_free(ev);
         }
+
+        short src[BUFSIZE];
+        int srclen = audio->read(src, BUFSIZE);
+        if (srclen > 0)
+        {
+            char dst[BUFSIZE];
+            int dstlen = BUFSIZE;
+            codec->encode(src, &srclen, dst, &dstlen);
+	    iax_send_voice(session, codec_format, dst, dstlen, srclen);
+        }
     }
 }
 
-void *iax_event_loop(void *arg)
+int IAX2Protocol::handle_voice(struct iax_event *ev)
 {
-    IAXClient *iax = (IAXClient*)arg;
-
-    pthread_t network_loop_thread;
-    pthread_create(&network_loop_thread, 0, iax_network_loop, iax);
-
-    iax->event_loop();
-    return 0;
-}
-
-int IAXClient::handle_voice(struct iax_event *ev)
-{
+    if (ev->subclass == codec_format)
+    {
+        char *src = (char*)ev->data;
+        int srclen = ev->datalen;
+        short dst[BUFSIZE];
+        int dstlen = BUFSIZE;
+        codec->decode(src, &srclen, dst, &dstlen);
+        audio->write(dst,dstlen);
+    }
+    else
+        fprintf(stderr,"Unknown voice format %d.\n", ev->subclass);
+        return 1;
+#if 0
     switch (ev->subclass)
     {
 	case AST_FORMAT_GSM:
@@ -163,10 +155,25 @@ int IAXClient::handle_voice(struct iax_event *ev)
 	    fprintf(stderr,"Unknown voice format %d.\n", ev->subclass);
 	    return 1;
     }
+#endif
     return 0;
 }
 
-int IAXClient::dtmf(const char c)
+int IAX2Protocol::dtmf(const char c)
 {
     return iax_send_dtmf(session, c);
+}
+
+void IAX2Protocol::set_codec(int format)
+{
+    switch(format)
+    {
+        case AST_FORMAT_GSM:
+            codec_format = format;
+            codec = new GSM();
+            break;
+        default:
+            fprintf(stderr,"Unrecognized format in set_codec(%d)\n",format);
+            codec = 0;
+    }
 }
