@@ -8,6 +8,7 @@
 #include <iax/iax-client.h>
 #include <string>
 #include <pthread.h>
+#include <gsm.h>
 
 using std::string;
 
@@ -35,6 +36,9 @@ class IAXClient
         int port;
         AudioInterface *audio;
         Coder *coder;
+
+	int handle_voice(struct iax_event*);
+        gsm gsm_handle;
 };
 void *iax_network_loop(void *arg);
 void *iax_event_loop(void *arg);

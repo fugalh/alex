@@ -9,6 +9,7 @@ IAXClient::IAXClient(AudioInterface *a, Coder *c) :
     sem_init(&event_sem,0,0);
     port = iax_init(IAX_DEFAULT_PORTNO);
     session = iax_session_new();
+    gsm_handle = gsm_create();
     iax_event_rb = jack_ringbuffer_create(sizeof(struct iax_event*) * 10000);
 }
 
@@ -17,13 +18,14 @@ IAXClient::~IAXClient()
     jack_ringbuffer_free(iax_event_rb);
     iax_destroy(session);
     sem_destroy(&event_sem);
+    gsm_destroy(gsm_handle);
 }
 
 
 int IAXClient::call(char* cidnum, char* cidname, char* ich)
 {
     int ret = iax_call(session, cidnum, cidname, ich, 
-	    NULL, 1, coder->format, coder->format);
+	    NULL, 1, AST_FORMAT_GSM, AST_FORMAT_GSM);
     audio->off_hook = 1;
     return ret;
 }
@@ -69,12 +71,27 @@ void IAXClient::event_loop()
             struct iax_event *ev;
             jack_ringbuffer_read(iax_event_rb, (char*)&ev, sizeof(ev));
 
-	    /*
-	    if (ev->etype == IAX_EVENT_ACCEPT)
+	    switch (ev->etype)
 	    {
-		iax_accept(session, coder->format);
+		case IAX_EVENT_ACCEPT:
+		    printf("Call accepted.\n");
+		    break;
+		case IAX_EVENT_ANSWER:
+		    printf("Call answered.\n");
+		    break;
+		case IAX_EVENT_VOICE:
+		    handle_voice(ev);
+		    break;
+		case IAX_EVENT_PONG:
+		    printf("Pong!\n");
+		    break;
+		case IAX_EVENT_HANGUP:
+		    printf("Hung up.\n");
+		    exit(0);
+		    break;
+		default:
+		    fprintf(stderr,"Unhandled packet of type %d.\n",ev->etype);
 	    }
-	    */
 
             iax_event_free(ev);
         }
@@ -96,5 +113,39 @@ void *iax_event_loop(void *arg)
     pthread_create(&network_loop_thread, 0, iax_network_loop, iax);
 
     iax->event_loop();
+    return 0;
+}
+
+int IAXClient::handle_voice(struct iax_event *ev)
+{
+    switch (ev->subclass)
+    {
+	case AST_FORMAT_GSM:
+	{
+	    if (ev->datalen % 33)
+	    {
+		fprintf(stderr,"Bad GSM data (len != 0 mod 33).\n");
+		return 1;
+	    }
+
+	    // convert from gsm (ev->data) to 8000hz short (audio->output_rb)
+	    gsm_byte *src;
+	    gsm_signal dst[160];
+	    for (int i=0; i < ev->datalen/33; i += 33)
+	    {
+		src = (gsm_byte*)ev->data + i;
+		gsm_decode(gsm_handle, src, dst);
+		int ret = jack_ringbuffer_write(audio->output_rb, (char*)dst, 
+			sizeof(dst));
+		if (ret < sizeof(dst))
+		    fprintf(stderr,"Buffer overflow in handle_voice(): "
+			    "%d bytes.\n", sizeof(dst) - ret);
+	    }
+	    break;
+	}
+	default:
+	    fprintf(stderr,"Unknown voice format %d.\n", ev->subclass);
+	    return 1;
+    }
     return 0;
 }

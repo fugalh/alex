@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 
     pthread_create(&iax_thread, 0, iax_event_loop, &iax);
 
-    iax.call("2224","JS Bach","hans:m00se@fugal.net/s");
+    iax.call("2224","JS Bach","hans:m00se@fugal.net/3");
 
     pthread_join(iax_thread, 0);
     return 0;
