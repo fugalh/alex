@@ -4,6 +4,7 @@
 #include "audio.h"
 #include <jack/jack.h>
 
+typedef jack_default_audio_sample_t sample_t;
 class Jack : public AudioInterface
 {
     public:
@@ -19,6 +20,8 @@ class Jack : public AudioInterface
         jack_port_t *input_port;
         jack_port_t *output_port;
         jack_client_t *client;
+	sample_t *buf;
+
 };
 
 #endif
