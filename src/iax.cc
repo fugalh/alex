@@ -62,8 +62,8 @@ void IAX::event_loop()
 	// wait for something interesting
 	FD_ZERO(&readfds);
 	FD_SET(iaxfd, &readfds);
-	FD_SET(semrfd, &readfds);
-        select(max(iaxfd,semrfd)+1, &readfds, 0, 0, 0);
+	FD_SET(audio->semrfd, &readfds);
+        select(max(iaxfd, audio->semrfd)+1, &readfds, 0, 0, 0);
 
         if (FD_ISSET(iaxfd, &readfds))
             ev = iax_get_event(1);
@@ -99,10 +99,10 @@ void IAX::event_loop()
             iax_event_free(ev);
         }
 
-	if (FD_ISSET(semrfd, &readfds))
+	if (FD_ISSET(audio->semrfd, &readfds))
 	{
 	    int foo;
-	    read(semrfd, &foo, 1);
+	    read(audio->semrfd, &foo, 1);
 	    if (audio->off_hook)
 	    {
 		short src[BUFSIZE];

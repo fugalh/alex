@@ -16,7 +16,6 @@ extern "C" {
     extern int *jack_off_hook;
     extern int samplerate;
     extern int semwfd;
-    extern int semrfd;
 
     typedef jack_default_audio_sample_t sample_t;
 

@@ -13,7 +13,6 @@
 #include "util.h"
 
 int semwfd;
-int semrfd;
 
 Jack::Jack()
 {
