@@ -55,7 +55,6 @@ int Jack::read(short *buf, int count)
     // XXX Think about doing this with vec
     int fbuf_len = min((unsigned int)count,jack_ringbuffer_read_space(jirb)/sizeof(sample_t));
     int fbuf_size = fbuf_len * sizeof(sample_t);
-    printf("count = %d\tfbuf_len = %d\n",count,fbuf_len);
     if (fbuf_size <= 0)
 	return 0;
     sample_t *fbuf = (sample_t*)alloca(fbuf_size);

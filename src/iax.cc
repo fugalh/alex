@@ -114,8 +114,9 @@ void IAX::event_loop()
 		if (dstlen > 0)
 		{
 		    iax_send_voice(session, codecs[0], dst, dstlen, srclen);
-		    printf("V");
 		}
+		else
+		    printf("V");
 	    }
 	}
     }
