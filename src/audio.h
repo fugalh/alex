@@ -2,6 +2,7 @@
 #define AUDIO_H
 
 #include "ringbuffer.h"
+#include <samplerate.h>
 
 class AudioInterface
 {
@@ -14,5 +15,7 @@ class AudioInterface
         jack_ringbuffer_t *output_rb;	// i.e. earpiece
 
         int off_hook;
+	SRC_STATE *src_input_state;
+	SRC_STATE *src_output_state;
 };
 #endif // ifndef AUDIO_H
