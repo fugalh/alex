@@ -1,7 +1,6 @@
 #include "iax.h"
 #include "codec.h"
 #include "gsm.h"
-#include "util.h"
 #include <pthread.h>
 
 #define BUFSIZE (1024)
@@ -55,22 +54,9 @@ int IAX::hangup(char* byemsg)
 
 void IAX::event_loop()
 {
-    struct iax_event *ev;
     while(1)
     {
-        // select with timeout
-        fd_set readfds;
-        int iaxfd = iax_get_fd();
-        FD_ZERO(&readfds);
-        FD_SET(iaxfd, &readfds);
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = min(20000, iax_time_to_next_event());
-        select(iaxfd+1, &readfds, 0, 0, &timeout);
-
-
-        if (FD_ISSET(iaxfd, &readfds))
-            ev = iax_get_event(1);
+	struct iax_event *ev = iax_get_event(1);
         printf(".");
         if (ev)
         {

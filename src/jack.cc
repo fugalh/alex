@@ -10,7 +10,7 @@
 #include "jack.h"
 #include "threads.h"
 #include <samplerate.h>
-#define min(X, Y)  ((X) < (Y) ? (X) : (Y))
+#include "util.h"
 
 Jack::Jack()
 {
