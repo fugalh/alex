@@ -12,6 +12,9 @@
 #include <samplerate.h>
 #include "util.h"
 
+int semwfd;
+int semrfd;
+
 Jack::Jack()
 {
     jack_off_hook = &off_hook;
@@ -30,6 +33,10 @@ Jack::Jack()
     }
     jirb = jack_ringbuffer_create(96000);
     jorb = jack_ringbuffer_create(96000);
+    int filedes[2];
+    pipe(filedes);
+    semrfd = filedes[0];
+    semwfd = filedes[1];
     jack_start();
 }
 
@@ -84,13 +91,15 @@ int Jack::write(short *buf, int count)
     src_short_to_float_array(buf, fbuf, count);
 
     // resample
-    sample_t *dst = (sample_t*)alloca(count*sizeof(sample_t));
+    double ratio = samplerate / 8000.0;
+    int dstlen = (int)ceil(ratio) * count;
+    sample_t *dst = (sample_t*)alloca(dstlen*sizeof(sample_t));
     SRC_DATA *d = &src_data_output;
     d->data_in = fbuf;
     d->input_frames = count;
     d->data_out = dst;
-    d->output_frames = count;
-    d->src_ratio = samplerate / 8000.0;
+    d->output_frames = dstlen;
+    d->src_ratio = ratio;
     d->end_of_input = 0;
     int ret = src_process(src_state_output, d);
     if (ret != 0)
@@ -100,7 +109,7 @@ int Jack::write(short *buf, int count)
     }
 
     // to ringbuffer
-    int len = min((unsigned int)d->input_frames_used, jack_ringbuffer_write_space(jorb)/sizeof(sample_t));
+    int len = min((unsigned int)d->output_frames_gen, jack_ringbuffer_write_space(jorb)/sizeof(sample_t));
     jack_ringbuffer_write(jorb, (char*)dst, len*sizeof(sample_t));
 
     return len;

@@ -3,6 +3,7 @@
 #include "gsm.h"
 #include "util.h"
 #include <pthread.h>
+#include "jack.h"
 
 #define BUFSIZE (1024)
 
@@ -53,24 +54,21 @@ int IAX::hangup(char* byemsg)
 void IAX::event_loop()
 {
     struct iax_event *ev;
+    // setup for select
+    fd_set readfds;
+    int iaxfd = iax_get_fd();
     while(1)
     {
-        // select with timeout
-        fd_set readfds;
-        int iaxfd = iax_get_fd();
-        FD_ZERO(&readfds);
-        FD_SET(iaxfd, &readfds);
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = min(20000, iax_time_to_next_event());
-        select(iaxfd+1, &readfds, 0, 0, &timeout);
-
+	// wait for something interesting
+	FD_ZERO(&readfds);
+	FD_SET(iaxfd, &readfds);
+	FD_SET(semrfd, &readfds);
+        select(max(iaxfd,semrfd)+1, &readfds, 0, 0, 0);
 
         if (FD_ISSET(iaxfd, &readfds))
             ev = iax_get_event(1);
         if (ev)
         {
-            printf("o");
 	    switch (ev->etype)
 	    {
 		case IAX_EVENT_ACCEPT:
@@ -85,7 +83,6 @@ void IAX::event_loop()
 		    audio->off_hook = 1;
 		    break;
 		case IAX_EVENT_VOICE:
-                    printf("v");
 		    handle_voice(ev);
 		    break;
 		case IAX_EVENT_PONG:
@@ -102,20 +99,25 @@ void IAX::event_loop()
             iax_event_free(ev);
         }
 
-        if (audio->off_hook)
-        {
-            short src[BUFSIZE];
-            int srclen;
-            srclen = audio->read(src, BUFSIZE);
-            char dst[BUFSIZE];
-            int dstlen = BUFSIZE;
-            get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
-            if (dstlen > 0)
-            {
-                iax_send_voice(session, codecs[0], dst, dstlen, srclen);
-                printf("V");
-            }
-        }
+	if (FD_ISSET(semrfd, &readfds))
+	{
+	    int foo;
+	    read(semrfd, &foo, 1);
+	    if (audio->off_hook)
+	    {
+		short src[BUFSIZE];
+		int srclen;
+		srclen = audio->read(src, BUFSIZE);
+		char dst[BUFSIZE];
+		int dstlen = BUFSIZE;
+		get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
+		if (dstlen > 0)
+		{
+		    iax_send_voice(session, codecs[0], dst, dstlen, srclen);
+		    printf("V");
+		}
+	    }
+	}
     }
 }
 

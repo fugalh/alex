@@ -28,9 +28,12 @@ process (jack_nframes_t nframes, void *arg)
         samplerate = jack_get_sample_rate(client);
 
         // input
-        //if (*jack_off_hook)
+        if (*jack_off_hook)
         {
             jack_ringbuffer_write(jirb, (char*)in, nframes*sizeof(sample_t));
+	    // signal 
+	    int foo = 1;
+	    write(semwfd, &foo, 1);
         }
 
         // output
