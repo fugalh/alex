@@ -23,7 +23,7 @@ IAXClient::~IAXClient()
 int IAXClient::call(char* cidnum, char* cidname, char* ich)
 {
     int ret = iax_call(session, cidnum, cidname, ich, 
-	    NULL, 0, coder->format, 0);
+	    NULL, 1, coder->format, coder->format);
     audio->off_hook = 1;
     return ret;
 }
@@ -68,7 +68,6 @@ void IAXClient::event_loop()
         {
             struct iax_event *ev;
             jack_ringbuffer_read(iax_event_rb, (char*)&ev, sizeof(ev));
-	    printf("2. ev: %d\n",ev);
 
 	    /*
 	    if (ev->etype == IAX_EVENT_ACCEPT)
