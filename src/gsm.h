@@ -7,7 +7,7 @@
 class GSM : public Codec
 {
     public:
-        GSM() { handle = gsm_create(); }
+        GSM() { framesize = 160; handle = gsm_create(); }
         virtual ~GSM() { gsm_destroy(handle); }
         void encode(short *src, int *srclen, char *dst, int *dstlen);
         void decode(char *src, int *srclen, short *dst, int *dstlen);

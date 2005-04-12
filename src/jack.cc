@@ -17,37 +17,21 @@ int semwfd;
 Jack::Jack()
 {
     jack_off_hook = &off_hook;
-    int err;
-    src_state_input = src_new(SRC_SINC_BEST_QUALITY, 1, &err);
-    if (!src_state_input)
-    {
-        fprintf(stderr,"Error creating src_state_input: %s\n",src_strerror(err));
-        // raise an exception?
-    }
-    src_state_output = src_new(SRC_SINC_BEST_QUALITY, 1, &err);
-    if (!src_state_output)
-    {
-        fprintf(stderr,"Error creating src_state_output: %s\n",src_strerror(err));
-        // raise an exception?
-    }
-    jirb = jack_ringbuffer_create(96000);
-    jorb = jack_ringbuffer_create(96000);
+    jirb = irb = jack_ringbuffer_create(96000);
+    jorb = orb = jack_ringbuffer_create(96000);
     int filedes[2];
     pipe(filedes);
     semrfd = filedes[0];
     semwfd = filedes[1];
-    jack_start();
+    jack_start(0);
 }
 
 Jack::~Jack()
 {
-    src_delete(src_state_input);
-    src_delete(src_state_output);
     jack_stop();
-    jack_ringbuffer_free(jorb);
-    jack_ringbuffer_free(jirb);
 }
 
+#if 0
 int Jack::read(short *buf, int count)
 {
     SRC_DATA *d = &src_data_input;
@@ -113,3 +97,4 @@ int Jack::write(short *buf, int count)
 
     return len;
 }
+#endif

@@ -101,22 +101,26 @@ void IAX::event_loop()
 
 	if (FD_ISSET(audio->semrfd, &readfds))
 	{
-	    int foo;
-	    read(audio->semrfd, &foo, 1);
+	    char foo[1024];
+	    read(audio->semrfd, &foo, sizeof(foo));
+	    Codec *c = get_codec(codecs[0]);
 	    if (audio->off_hook)
 	    {
-		short src[BUFSIZE];
-		int srclen;
-		srclen = audio->read(src, BUFSIZE);
-		char dst[BUFSIZE];
-		int dstlen = BUFSIZE;
-		get_codec(codecs[0])->encode(src, &srclen, dst, &dstlen);
-		if (dstlen > 0)
+		short *src = (short*)alloca(c->framesize);
+		while(jack_ringbuffer_read_space(audio->irb) >= c->framesize)
 		{
-		    iax_send_voice(session, codecs[0], dst, dstlen, srclen);
+		    int srclen = jack_ringbuffer_read(audio->irb, 
+			    (char*)src, c->framesize);
+		    char dst[BUFSIZE];
+		    int dstlen = BUFSIZE;
+		    c->encode(src, &srclen, dst, &dstlen);
+		    if (dstlen > 0)
+		    {
+			iax_send_voice(session, codecs[0], dst, dstlen, srclen);
+		    }
+		    else
+			printf("%d %d\n",srclen,dstlen);
 		}
-		else
-		    printf("V");
 	    }
 	}
     }
@@ -130,9 +134,9 @@ int IAX::handle_voice(struct iax_event *ev)
         char *src = (char*)ev->data;
         int srclen = ev->datalen;
         short dst[BUFSIZE];
-        int dstlen = BUFSIZE;
+        int dstlen = min(BUFSIZE, jack_ringbuffer_write_space(audio->orb));
         codec->decode(src, &srclen, dst, &dstlen);
-        audio->write(dst,dstlen);
+	jack_ringbuffer_write(audio->orb, (char*)dst, dstlen*sizeof(short));
     }
     else
     {

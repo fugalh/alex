@@ -10,15 +10,13 @@ class Audio
         Audio();
         virtual ~Audio();
 
-        virtual int read(short *buf, int count) = 0;
-        virtual int write(short *buf, int count) = 0;
-        int off_hook;
-
+	jack_ringbuffer_t *irb; /// input (mic) ringbuffer
+	jack_ringbuffer_t *orb; /// output (speaker) ringbuffer
 	/// Semaphore read file descriptor, to select on.
 	int semrfd;
 
+        int off_hook;
+
     protected:
-	SRC_STATE *src_input_state;
-	SRC_STATE *src_output_state;
 };
 #endif // ifndef AUDIO_H
